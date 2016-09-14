@@ -1,14 +1,13 @@
 #!/usr/bin/python
 # coding: UTF-8, break: linux, indent: 4 spaces, lang: python/eng
 '''
-Convert common image formats to gcode - WORK IN PROGRESS.
+Convert common image formats to G-code.
 
 Program is optimized of a lulzbut Mini with a 1W engraving laser and tested
 with KiCad plots as input. Usage with anything else at your own risk!
 
 ToDo:
- - Thorough testing
- - Cleanup code (esp. globals)
+ - Enable grayscale engraving
 
 Usage:
     {progname} --help | --version | --test
@@ -51,6 +50,7 @@ import pint
 import matplotlib.pyplot as plt
 from docopt import docopt
 from PIL import Image
+from io import StringIO
 
 #=======================================================================
 
@@ -134,9 +134,9 @@ def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.s
     Example:
     >>> dat = np.zeros((5,3),dtype='uint8')
     >>> dat[:,2] = 1
-    >>> buff = StringIO.StringIO()
+    >>> buff = StringIO()
     >>> write_gcode( dat, fl=buff )
-    >>> buff.seek(0)
+    >>> _ = buff.seek(0)
     >>> ''.join(buff.readlines())
     u'M107\nG1 X20.1 Y20.0 F1500\n\nM106 S255\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F1500\n\nM106 S255\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F1500\n\n'
     '''
@@ -214,9 +214,9 @@ def svg_get_phys_size( fn ):
     '''Get pyhsical dimentions from the metadata of an svg image.
 
     Example:
-    >>> import StringIO
-    >>> svg = StringIO.StringIO()
-    >>> svg.write('<svg width="13.97cm" height="7.68in"></svg>'); svg.seek(0)
+    >>> svg = StringIO()
+    >>> _ = svg.write('<svg width="13.97cm" height="7.68in"></svg>')
+    >>> _ = svg.seek(0)
     >>> svg_get_phys_size(svg)
     (<Quantity(139.7, 'millimeter')>, <Quantity(195.072, 'millimeter')>)
     '''
@@ -236,11 +236,11 @@ def load_svg( fn, dpi, w, h ):
     array([[1]], dtype=uint8)
     '''
     import cairosvg
-    import StringIO
+    from io import BytesIO
     if not dpi: dpi = 96
     debug( 'SVG - %s, dpi: %s', fn, dpi )
     pngtxt = cairosvg.svg2png(url=fn, dpi=dpi)
-    buff = StringIO.StringIO()
+    buff = BytesIO()
     buff.write(pngtxt)
     buff.seek(0)
     return load_img(buff, dpi, dpi, dpi, w, h)
@@ -285,13 +285,13 @@ def write_ngrv_file(infl, outfl):
     fl.write( post.format( **globals() ) )
 
 
-if __name__ == '__main__':
+def main():
     # Argument handling and all the boring bookkeeping stuff
     progname = os.path.splitext(os.path.basename( __file__ ))[0]
-    vstring = (' v0.3\nWritten by con-f-use@gmx.net\n'
-               '(Sat Sep 12 11:38:45 CEST 2016) on confusion' )
-    args = docopt(__doc__.format(**locals()), version=progname+vstring)
-    if args['--test']: import doctest, StringIO; doctest.testmod(); exit(0)
+    vstring = (' v0.4\nWritten by con-f-use@gmx.net\n'
+               '(Sat Sep 14 12:01:51 CEST 2016) on confusion' )
+    args = docopt(__doc__.format(progname=progname,**globals()), version=progname+vstring)
+    if args['--test']: import doctest; doctest.testmod(); exit(0)
     verb    = logging.ERROR - int(args['--verbose'])*10
     logging.basicConfig(
         level   = verb,
@@ -299,6 +299,7 @@ if __name__ == '__main__':
                   '%(filename)s:%(lineno)s) %(message)s',
         datefmt = '%y%m%d %H:%M'   #, stream=, mode=, filename=
     )
+    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon
     lon     =      args['--on-command']
     loff    =      args['--off-command']
     nvrt    =      args['--invert']
@@ -316,3 +317,7 @@ if __name__ == '__main__':
     lfon = lon +' S'+ str(int( args['--engraver-max']       ))
 
     write_ngrv_file( args['INFILE'], args['OUTFILE'] )
+
+
+if __name__ == '__main__':
+    main()
