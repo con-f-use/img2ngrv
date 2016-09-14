@@ -20,6 +20,8 @@ Options:
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
                                        [default: {tdpi}dpi]
     -i --invert                     Invert pixels of input image
+    -c --clip=<float>               Threshold pixel value to be interpreted
+                                    as "black" [default: {clp}]
     -1 --on-command=<str>           Command to turn the engraver on
                                        [default: {lon}]
     -0 --off-command=<str>          Command to turn the engraver off
@@ -60,11 +62,12 @@ lfon = lon +' S255'
 lson = lon +' S90'
 verb = 0
 tdpi = 508
-lghtspd = 300
+lghtspd = 500
 lowspd = 70
-mvspd = 1500
+mvspd = 2000
 xfst = 20.0
 yfst = 20.0
+clp = 127
 nvrt = False
 
 tm = time.strftime('%c')
@@ -138,7 +141,7 @@ def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.s
     >>> write_gcode( dat, fl=buff )
     >>> _ = buff.seek(0)
     >>> ''.join(buff.readlines())
-    u'M107\nG1 X20.1 Y20.0 F1500\n\nM106 S255\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F1500\n\nM106 S255\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F1500\n\n'
+    u'M107\nG1 X20.1 Y20.0 F2000\n\nM106 S255\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F2000\n\nM106 S255\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F2000\n\n'
     '''
     lst = 0
     for y in xrange( 0, dat.shape[0]):
@@ -149,7 +152,7 @@ def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.s
         for x in xrange( sta, end, 1-2*drcn ):
             val = dat[y,x]
             if val != lst:
-                if val == 1:
+                if val:
                     fl.write(
                         loff +"\n"+
                         'G1 X'+ trfx(x+drcn) +' Y'+ trfy(y) +' F'+ str(mvspd) +"\n"
@@ -163,7 +166,7 @@ def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.s
         fl.write("\n")
 
 
-def crop(dat, clp=True, nvrt=False):
+def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
     '''Crops zero-edges of an array and clips it to [0,1].
 
     Example:
@@ -174,25 +177,27 @@ def crop(dat, clp=True, nvrt=False):
     ...        [0,0,0,0,0,0],
     ...        [0,7,4,1,0,0],
     ...        [0,0,0,0,0,0]]
-    ...     ))
-    array([[1, 0, 1, 1],
+    ...     ), clp=1)
+    array([[1, 0, 2, 9],
            [0, 0, 0, 0],
-           [1, 1, 1, 0]])
+           [7, 4, 1, 0]])
     '''
-    if clp:    np.clip( dat, 0, 1, out=dat )
-    if nvrt:   dat = 1-dat
+    if clp:    dat[dat<clp] = 0;
+    if nvrt:   dat = dat.max()-dat
     true_points = np.argwhere(dat)
     top_left = true_points.min(axis=0)
     bottom_right = true_points.max(axis=0)
     dat = dat[  top_left[0]:bottom_right[0]+1,
                 top_left[1]:bottom_right[1]+1  ]
+    if flplr:  np.fliplr(dat)
+    if flpud:  np.flipud(dat)
     return dat
 
 
-def load_img( fn, tdpi, dx, dy, w, h ):
+def load_img( fn, tdpi, clp, dx, dy, w, h ):
     '''Load raster image and prepare it for `write_gcode(...)`.'''
     img = Image.open( fn )
-    img = img.convert('L') # grayscale
+    img = img.convert('P') # greyscale
     if not w: w = img.width
     if not h: h = img.height
     if not dx: dx = img.info.get('dpi', [tdpi])[0]
@@ -205,7 +210,9 @@ def load_img( fn, tdpi, dx, dy, w, h ):
     img = img.resize( (nw,nh), Image.BICUBIC ) # NEAREST
     img.info['dpi'] = (tdpi, tdpi)
     dat = np.asarray( img, dtype='uint8' )
-    dat = crop(dat, nvrt=nvrt)
+    dat.setflags(write=True)
+    #dt = np.copy(dat)
+    dat = crop(dat, clp=clp, nvrt=nvrt)
     debug('RSTR - Shape [0]: %s(y), [1]: %s(x)', dat.shape[0], dat.shape[1])
     return dat
 
@@ -228,22 +235,21 @@ def svg_get_phys_size( fn ):
     return wd.to('mm'), ht.to('mm')
 
 
-def load_svg( fn, dpi, w, h ):
+def load_svg( fn, dpi, clp, w, h ):
     '''Load svg image and prepare it for `write_gcode(...)`.
 
     Example:
-    >>> load_svg('https://www.w3.org/Icons/SVG/svg-logo.svg', 0, 1, 1)
-    array([[1]], dtype=uint8)
+    >>> load_svg('https://www.w3.org/Icons/SVG/svg-logo.svg', 0, 1, 1, 1)
+    array([[255]], dtype=uint8)
     '''
     import cairosvg
     from io import BytesIO
     if not dpi: dpi = 96
     debug( 'SVG - %s, dpi: %s', fn, dpi )
-    pngtxt = cairosvg.svg2png(url=fn, dpi=dpi)
     buff = BytesIO()
-    buff.write(pngtxt)
+    cairosvg.svg2png(url=fn, write_to=buff, dpi=dpi) #url=fn #file_obj=fn
     buff.seek(0)
-    return load_img(buff, dpi, dpi, dpi, w, h)
+    return load_img(buff, dpi, clp, dpi, dpi, w, h)
 
 
 def trfx( x ):
@@ -256,10 +262,10 @@ def trfy( y ):
 def write_ngrv_file(infl, outfl):
     '''Make a gcode raster for engraving from an input image.'''
     try:
-        dat = load_svg(infl, tdpi, None, None)
+        dat = load_svg(infl, tdpi, clp, None, None)
     except:
         try:
-            dat = load_img(infl, tdpi, None, None, None, None)
+            dat = load_img(infl, tdpi, clp, None, None, None, None)
         except:
             raise
 
@@ -291,7 +297,7 @@ def main():
     vstring = (' v0.4\nWritten by con-f-use@gmx.net\n'
                '(Sat Sep 14 12:01:51 CEST 2016) on confusion' )
     args = docopt(__doc__.format(progname=progname,**globals()), version=progname+vstring)
-    if args['--test']: import doctest; doctest.testmod(); exit(0)
+    if args['--test']: import doctest; doctest.testmod(verbose=True); exit(0)
     verb    = logging.ERROR - int(args['--verbose'])*10
     logging.basicConfig(
         level   = verb,
@@ -303,6 +309,7 @@ def main():
     lon     =      args['--on-command']
     loff    =      args['--off-command']
     nvrt    =      args['--invert']
+    clp     =      args['--clip']
     tdpi    = ureg.parse_expression(args['--target-resolution'])
     xfst    = ureg.parse_expression(args['--x-offset'])
     yfst    = ureg.parse_expression(args['--y-offset'])
