@@ -146,12 +146,12 @@ def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.s
     u'M107\nG1 X20.1 Y20.0 F2000\n\nM106 S255\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F2000\n\nM106 S255\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F2000\n\n'
     '''
     lst = 0
-    for y in xrange( 0, dat.shape[0]):
+    for y in range( 0, dat.shape[0]):
         if all( dat[y,:]>0 ): continue # Skip empty lines
         drcn = y % 2
         sta = int(       drcn  * (dat.shape[1]-1)          )
         end = int(  (not drcn) * (dat.shape[1]  ) - 1*drcn )
-        for x in xrange( sta, end, 1-2*drcn ):
+        for x in range( sta, end, 1-2*drcn ):
             val = dat[y,x]
             if val != lst:
                 if val:
@@ -295,9 +295,7 @@ def write_ngrv_file(infl, outfl):
 
 def run_tests():
     import doctest
-    doctest.testmod(m=sys.modules.get('img2ngrv'),verbose=True)
-    exit(0)
-
+    exit( doctest.testmod(m=sys.modules.get('img2ngrv'),verbose=True) )
 
 def main():
     # Argument handling and all the boring bookkeeping stuff
