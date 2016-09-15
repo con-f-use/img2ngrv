@@ -48,7 +48,7 @@ Options:
 
 from __future__ import division, print_function, unicode_literals
 from logging import info, debug, error, warning as warn
-import sys, os, re, math, glob, logging, time
+import sys, os, re, logging, time
 import numpy as np
 import pint
 import matplotlib.pyplot as plt
@@ -173,12 +173,10 @@ def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
 
     Example:
     >>> crop( np.array(
-    ...       [[0,0,0,0,0,0],
-    ...        [0,0,0,0,0,0],
-    ...        [0,1,0,2,9,0],
-    ...        [0,0,0,0,0,0],
-    ...        [0,7,4,1,0,0],
-    ...        [0,0,0,0,0,0]]
+    ...       [[0,0,0,0,0,0,0,0],
+    ...        [0,1,0,2,9,0,0,0],
+    ...        [0,0,0,0,0,0,0,0],
+    ...        [0,7,4,1,0,0,0,0]]
     ...     ), clp=1)
     array([[1, 0, 2, 9],
            [0, 0, 0, 0],
@@ -194,6 +192,17 @@ def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
     if flplr:  np.fliplr(dat)
     if flpud:  np.flipud(dat)
     return dat
+
+
+def prevw_ngrv(infl, dat):
+    '''Preview data'''
+    import tempfile
+    nm = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
+    plt.title('Engraving mask from '+ infl)
+    plt.imshow( dat, interpolation='none', cmap='Greys_r' )
+    plt.savefig(nm)
+    plt.show()
+    print( "Saved to '{}'".format(nm) )
 
 
 def load_img( fn, tdpi, clp, dx, dy, w, h ):
@@ -272,15 +281,8 @@ def write_ngrv_file(infl, outfl):
             raise
 
     # Preview if verbose
-    dat.setflags( write=True )
     if verb <= logging.WARNING:
-        import tempfile
-        nm = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
-        plt.title('Engraving mask from '+ infl)
-        plt.imshow( dat, interpolation='none', cmap='Greys_r' )
-        plt.savefig(nm)
-        plt.show()
-        print( "Saved to '{}'".format(nm) )
+        prevw_ngrv(infl, dat)
 
     # Write File
     fl = open( outfl, 'w' ) if outfl else sys.stdout
