@@ -3,11 +3,13 @@
 '''
 Convert common image formats to G-code.
 
-Program is optimized of a lulzbut Mini with a 1W engraving laser and tested
-with KiCad plots as input. Usage with anything else at your own risk!
+Program is optimized for a lulzbut Mini with a 1W engraving laser and tested
+with KiCad .svg and .png plots as input. Usage with anything else than that
+may prove difficult.
 
 ToDo:
  - Enable grayscale engraving
+ - Incorporate git version in this module
 
 Usage:
     {progname} --help | --version | --test
@@ -16,7 +18,7 @@ Usage:
 Options:
     -v --verbose                    Specify (multiply) to increase output
                                        messages
-    --test                          Test this program and exit
+    --test                          Test componentts of this program and exit
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
                                        [default: {tdpi}dpi]
     -i --invert                     Invert pixels of input image
@@ -291,13 +293,19 @@ def write_ngrv_file(infl, outfl):
     fl.write( post.format( **globals() ) )
 
 
+def run_tests():
+    import doctest
+    doctest.testmod(m=sys.modules.get('img2ngrv'),verbose=True)
+    exit(0)
+
+
 def main():
     # Argument handling and all the boring bookkeeping stuff
     progname = os.path.splitext(os.path.basename( __file__ ))[0]
     vstring = (' v0.4\nWritten by con-f-use@gmx.net\n'
                '(Sat Sep 14 12:01:51 CEST 2016) on confusion' )
     args = docopt(__doc__.format(progname=progname,**globals()), version=progname+vstring)
-    if args['--test']: import doctest; doctest.testmod(verbose=True); exit(0)
+    if args['--test']: run_tests()
     verb    = logging.ERROR - int(args['--verbose'])*10
     logging.basicConfig(
         level   = verb,
