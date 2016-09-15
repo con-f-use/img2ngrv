@@ -295,7 +295,8 @@ def write_ngrv_file(infl, outfl):
 
 def run_tests():
     import doctest
-    exit( doctest.testmod(m=sys.modules.get('img2ngrv'),verbose=True) )
+    sys.exit(doctest.testmod(m=sys.modules.get('img2ngrv'),verbose=True)[0])
+
 
 def main():
     # Argument handling and all the boring bookkeeping stuff
