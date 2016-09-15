@@ -227,14 +227,14 @@ def svg_get_phys_size( fn ):
     >>> _ = svg.write('<svg width="13.97cm" height="7.68in"></svg>')
     >>> _ = svg.seek(0)
     >>> svg_get_phys_size(svg)
-    (<Quantity(139.7, 'millimeter')>, <Quantity(195.072, 'millimeter')>)
+    (139.7, 195.072)
     '''
     import xml.etree.ElementTree
     xml = xml.etree.ElementTree.parse(fn).getroot()
     wd, ht = xml.attrib.get('width', None), xml.attrib.get('height', None)
     wd, ht = ureg.parse_expression(wd), ureg.parse_expression(ht)
     debug( 'XML - height: %s, width: %s', wd.to('mm'), ht.to('mm') )
-    return wd.to('mm'), ht.to('mm')
+    return round(wd.to('mm').magnitude,4), round(ht.to('mm').magnitude,4)
 
 
 def load_svg( fn, dpi, clp, w, h ):
@@ -295,7 +295,17 @@ def write_ngrv_file(infl, outfl):
 
 def run_tests():
     import doctest
-    sys.exit(doctest.testmod(m=sys.modules.get('img2ngrv'),verbose=True)[0])
+    class Py23DocChecker(doctest.OutputChecker):
+      def check_output(self, want, got, optionflags):
+        if sys.version_info[0] > 2:
+          want = re.sub("u'(.*?)'", "'\\1'", want)
+          want = re.sub('u"(.*?)"', '"\\1"', want)
+        return want == got
+    doctest.OutputChecker = Py23DocChecker
+    sys.exit( doctest.testmod(
+            m=sys.modules.get('img2ngrv'),
+            verbose=True
+    )[0])
 
 
 def main():
