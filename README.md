@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/con-f-use/img2ngrv.png?branch=master)](https://travis-ci.org/con-f-use/img2ngrv)
+<a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png" /></a>
 
 # img2ngrv - Iamge to Engraver Raster
 
@@ -32,11 +33,11 @@ Once done, you should be able to get a discripts of the programs usage with:
 
 Copyright (c) 2016 con-f-use@gmx.net
 
-The project concept along with all files in this repository are owned by the copy right holder. The content of this repository is licensed under the Creative Commons Attribution 4.0 International License.
+The project along with all files in this repository are owned by the copy right holder. The content of this repository can be used under the <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>..
 
-A copy of this license should be included with the distribution of this text.
+A copy of the license should be included with the distribution of this text.
 If not, visit http://creativecommons.org/licenses/by/4.0/.
 
+<sub>
 THE WORK INCLUDING ANY DERIVED HARDWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-<a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png" /></a><br /><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">WeightWatcher</span> by <a xmlns:cc="http://creativecommons.org/ns#" href="https://github.com/con-f-use/img2ngrv" property="cc:attributionName" rel="cc:attributionURL">con-f-use</a> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.
+</sub>
