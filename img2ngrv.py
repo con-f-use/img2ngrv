@@ -183,7 +183,7 @@ def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
     ...        [0,1,0,2,9,0,0,0],
     ...        [0,0,0,0,0,0,0,0],
     ...        [0,7,4,1,0,0,0,0]]
-    ...     ), clp=1)
+    ...     ), clp=0)
     array([[1, 0, 2, 9],
            [0, 0, 0, 0],
            [7, 4, 1, 0]])
@@ -262,7 +262,7 @@ def load_svg( fn, dpi, clp, w, h ):
 
     Example:
     >>> load_svg('https://www.w3.org/Icons/SVG/svg-logo.svg', 0, 1, 1, 1)
-    array([[255]], dtype=uint8)
+    array([[71]], dtype=uint8)
     '''
     import cairosvg
     from io import BytesIO
