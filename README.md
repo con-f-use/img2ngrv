@@ -1,7 +1,4 @@
-[![Build Status](https://travis-ci.org/con-f-use/img2ngrv.png?branch=master)](https://travis-ci.org/con-f-use/img2ngrv)
-<a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png" /></a>
-
-# img2ngrv - Iamge to Engraver Raster
+# img2ngrv - Iamge to Engraver Raster <a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png" /></a> [![Build Status](https://travis-ci.org/con-f-use/img2ngrv.png?branch=master)](https://travis-ci.org/con-f-use/img2ngrv)
 
 Convert a pixel or vector image to [G-code](https://en.wikipedia.org/wiki/G-code) as commonly used by home-made (laser) engraving machines.
 
