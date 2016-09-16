@@ -8,7 +8,6 @@ with KiCad .svg and .png plots as input. Usage with anything else than that
 may prove difficult.
 
 ToDo:
- - Enable grayscale engraving
  - Incorporate git version in this module
 
 Usage:
@@ -17,11 +16,15 @@ Usage:
 
 Options:
     -v --verbose                    Specify (multiply) to increase output
-                                       messages
+                                       messages (and plot a preview)
     --test                          Test componentts of this program and exit
+    -i --invert                     Invert pixels of input image
+    -a --alternate-mode             Fix rare issue with svg tranparency
+    -b --black-and-white            Set every pixel non-zero pixel to maximum
+                                        intensity
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
                                        [default: {tdpi}dpi]
-    -i --invert                     Invert pixels of input image
+    -m --mirror                     Flip left and right
     -c --clip=<float>               Threshold pixel value to be interpreted
                                     as "black" [default: {clp}]
     -1 --on-command=<str>           Command to turn the engraver on
@@ -49,19 +52,21 @@ Options:
 from __future__ import division, print_function, unicode_literals
 from logging import info, debug, error, warning as warn
 import sys, os, re, logging, time
+from io import StringIO
 import numpy as np
 import pint
 import matplotlib.pyplot as plt
 from docopt import docopt
 from PIL import Image
-from io import StringIO
 
 #=======================================================================
 
 loff = 'M107'
 lon  = 'M106'
-lfon = lon +' S255'
-lson = lon +' S90'
+fint = 255
+lint = 90
+lfon = lon +' S'+ str(fint)
+lson = lon +' S'+ str(lint)
 verb = 0
 tdpi = 508
 lghtspd = 500
@@ -69,8 +74,11 @@ lowspd = 70
 mvspd = 2000
 xfst = 20.0
 yfst = 20.0
-clp = 127
+clp = 1
 nvrt = False
+bw = False
+flplr = False
+altm = False
 
 tm = time.strftime('%c')
 
@@ -97,12 +105,10 @@ G4 S1                        ; pause
 M400                         ; clear buffer
 {lson}                     ; Turn on laser just enough to see it
 G4 S100                      ; dwell to allow for laser focusing
-G1 X0 Y0
 
 ; Bounding box for placement
 G1 X{x0} Y{y0} ; Start (lower left corner)
-{lon} S255
-G1 X{x0} Y{y0} F{lghtspd} ; Lower left
+{lfon}
 G1 X{x1} Y{y0} F{lghtspd} ; Lower right
 G1 X{x1} Y{y1} F{lghtspd} ; Upper right
 G1 X{x0} Y{y1} F{lghtspd} ; Upper left
@@ -138,30 +144,30 @@ def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.s
 
     Example:
     >>> dat = np.zeros((5,3),dtype='uint8')
-    >>> dat[:,2] = 1
+    >>> dat[:,2] = 255
     >>> buff = StringIO()
     >>> write_gcode( dat, fl=buff )
     >>> _ = buff.seek(0)
     >>> ''.join(buff.readlines())
-    u'M107\nG1 X20.1 Y20.0 F2000\n\nM106 S255\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F2000\n\nM106 S255\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F2000\n\n'
+    u'M107\nG1 X20.1 Y20.0 F2000\n\nM106 S90\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F2000\n\nM106 S90\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F2000\n\n'
     '''
     lst = 0
     for y in range( 0, dat.shape[0]):
         if all( dat[y,:]>0 ): continue # Skip empty lines
         drcn = y % 2
-        sta = int(       drcn  * (dat.shape[1]-1)          )
-        end = int(  (not drcn) * (dat.shape[1]  ) - 1*drcn )
+        sta = int(       drcn  * (dat.shape[1]-1)        )
+        end = int(  (not drcn) * (dat.shape[1]  ) - drcn )
         for x in range( sta, end, 1-2*drcn ):
             val = dat[y,x]
             if val != lst:
-                if val:
+                if not lst:
                     fl.write(
                         loff +"\n"+
                         'G1 X'+ trfx(x+drcn) +' Y'+ trfy(y) +' F'+ str(mvspd) +"\n"
                     )
                 else:
                     fl.write(
-                        lfon +"\n"+
+                        lon +' S'+ trfv(val) +"\n"+
                         'G1 X'+ trfx(x+drcn) +' Y'+ trfy(y) +' F'+ str(lowspd) +"\n"
                     )
                 lst = val
@@ -182,8 +188,9 @@ def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
            [0, 0, 0, 0],
            [7, 4, 1, 0]])
     '''
-    if clp:    dat[dat<clp] = 0;
-    if nvrt:   dat = dat.max()-dat
+    if clp:    dat[dat<=clp] = 0;
+    if bw:     dat[dat>clp] = 255;
+    if nvrt:   dat = 255-dat
     true_points = np.argwhere(dat)
     top_left = true_points.min(axis=0)
     bottom_right = true_points.max(axis=0)
@@ -198,8 +205,9 @@ def prevw_ngrv(infl, dat):
     '''Preview data'''
     import tempfile
     nm = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
-    plt.title('Engraving mask from '+ infl)
-    plt.imshow( dat, interpolation='none', cmap='Greys_r' )
+    mrrd = ' (mirrored)' if flplr else ''
+    plt.title('Engraving mask from '+ infl + mrrd)
+    plt.imshow( dat, interpolation='none', cmap='Greys' ) # Greys_r'
     plt.savefig(nm)
     plt.show()
     print( "Saved to '{}'".format(nm) )
@@ -208,7 +216,10 @@ def prevw_ngrv(infl, dat):
 def load_img( fn, tdpi, clp, dx, dy, w, h ):
     '''Load raster image and prepare it for `write_gcode(...)`.'''
     img = Image.open( fn )
-    img = img.convert('P') # greyscale
+    bgr = Image.new( "RGBA", img.size, (0,0,0) )
+    bgr.paste( img, mask=img.split()[3] )
+    mode = 'P' if altm else 'L'
+    img = img.convert(mode) # greyscale
     if not w: w = img.width
     if not h: h = img.height
     if not dx: dx = img.info.get('dpi', [tdpi])[0]
@@ -263,11 +274,10 @@ def load_svg( fn, dpi, clp, w, h ):
     return load_img(buff, dpi, clp, dpi, dpi, w, h)
 
 
-def trfx( x ):
-    return str(x*(1.0/tdpi*25.4)+xfst)
-
-def trfy( y ):
-    return str(y*(1.0/tdpi*25.4)+yfst)
+# Coordinate transform functions for for `write_gcode(...)`.
+def trfx( x ): return str( x*(1.0/tdpi*25.4) + xfst )
+def trfy( y ): return str( y*(1.0/tdpi*25.4) + yfst )
+def trfv( v ): return str( int( lint + v/255*(fint - lint) ) )
 
 
 def write_ngrv_file(infl, outfl):
@@ -296,6 +306,7 @@ def write_ngrv_file(infl, outfl):
 
 
 def run_tests():
+    '''Run tests for all functions in this code.'''
     import doctest
     class Py23DocChecker(doctest.OutputChecker):
       def check_output(self, want, got, optionflags):
@@ -324,11 +335,16 @@ def main():
                   '%(filename)s:%(lineno)s) %(message)s',
         datefmt = '%y%m%d %H:%M'   #, stream=, mode=, filename=
     )
-    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon
+    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon, fint, lint, bw, flplr, altm
     lon     =      args['--on-command']
     loff    =      args['--off-command']
     nvrt    =      args['--invert']
+    bw      =      args['--black-and-white']
+    flplr   =      args['--mirror']
     clp     =      args['--clip']
+    altm    =      args['--alternate-mode']
+    lint    = int( args['--engraver-threshold'] )
+    fint    = int( args['--engraver-max']       )
     tdpi    = ureg.parse_expression(args['--target-resolution'])
     xfst    = ureg.parse_expression(args['--x-offset'])
     yfst    = ureg.parse_expression(args['--y-offset'])
@@ -339,8 +355,8 @@ def main():
     lghtspd = int( args['--light-speed'] )
     lowspd  = int( args['--low-speed']   )
     mvspd   = int( args['--move-speed']  )
-    lson = lon +' S'+ str(int( args['--engraver-threshold'] ))
-    lfon = lon +' S'+ str(int( args['--engraver-max']       ))
+    lson = lon +' S'+ str(lint)
+    lfon = lon +' S'+ str(fint)
 
     write_ngrv_file( args['INFILE'], args['OUTFILE'] )
 
