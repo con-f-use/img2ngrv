@@ -1,4 +1,5 @@
-# img2ngrv - Iamge to Engraver Raster &nbsp;&nbsp;&nbsp; [![Build Status](https://i.creativecommons.org/l/by/4.0/88x31.png)](http://creativecommons.org/licenses/by/4.0/) [![Build Status](https://travis-ci.org/con-f-use/img2ngrv.png?branch=master)](https://travis-ci.org/con-f-use/img2ngrv)
+img2ngrv - Iamge to Engraver Raster &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [![Build Status](https://travis-ci.org/con-f-use/img2ngrv.png?branch=master)](https://travis-ci.org/con-f-use/img2ngrv) [![Build Status](https://i.creativecommons.org/l/by/4.0/88x31.png)](http://creativecommons.org/licenses/by/4.0/)
+=======================
 
 Convert a pixel or vector image to [G-code](https://en.wikipedia.org/wiki/G-code) as commonly used by home-made (laser) engraving machines.
 
@@ -26,7 +27,10 @@ Once done, you should be able to get a discripts of the programs usage with:
 
     img2ngrv --help
 
-## License
+
+
+License and Disclaimer
+=======================
 
 Copyright (c) 2016 con-f-use@gmx.net
 
