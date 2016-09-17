@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name             = 'img2ngrv',
-    version          = 0.4,
+    version          = 0.5,
     author           = 'con-f-use',
     author_email     = 'con-f-use@gmx.net',
     description      = ('Iamge to Engraver Raster'),

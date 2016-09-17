@@ -7,9 +7,8 @@ This particular code is tested with the [LulzBot](https://www.lulzbot.com/)
 3D printers modified for laser engraving with one of the kits sold by
 [J Tech Photonics](https://jtechphotonics.com/). The software is similar in end result to their
 [LaserEtch](https://jtechphotonics.com/?product=laser-etch-bw-image-engraving-sw-license)
-tool.
-
-img2ngrv might support grayscale engraving once the demand arises.
+tool. For other engraves, you will have to teak the (G-)code manually,
+especially the preamble. Luckily the program is contained in one python file.
 
 # Usage
 
@@ -21,9 +20,11 @@ or run:
 
 After to you received a copy and uzipped the code, run:
 
-    ./setup.py install   # --user # --editable
+    ./setup.py install   # --user
+    # or
+    # pip install --editable .
 
-Once done, you should be able to get a discripts of the programs usage with:
+Once done, you should be able to get a the programs usage with:
 
     img2ngrv --help
 

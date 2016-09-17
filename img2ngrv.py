@@ -9,6 +9,8 @@ may prove difficult.
 
 ToDo:
  - Incorporate git version in this module
+ - Think about changing engrving speed with pixel value as well
+ - Turn this mess into classes
 
 Usage:
     {progname} --help | --version | --test
@@ -38,9 +40,9 @@ Options:
     -m --move-speed=<float>         Speed when moving without engraving
                                        [default: {mvspd}]
     -t --engraver-threshold=<int>   Threshold driving value for the engraver
-                                       [default: 90]
+                                       [default: {lint}]
     -M --engraver-max=<int>         Maximal driving value for the engraver
-                                       [default: 255]
+                                       [default: {fint}]
     -x --x-offset=<float>           Offset from zero position in x-direction
                                        [default: {xfst}mm]
     -y --y-offset=<float>           Offset from zero position in y-direction
@@ -139,39 +141,43 @@ ureg = pint.UnitRegistry()
 ureg.define('dotsperinch = 1/25.4/mm = dpi')
 
 
-def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.stdout ):
+def write_gcode( dat, lon=lon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.stdout ):
     r'''Traverses `dat` in zic-sac to create a gcode raster of it.
 
     Example:
-    >>> dat = np.zeros((5,3),dtype='uint8')
-    >>> dat[:,2] = 255
+    >>> dat = np.zeros((3,4),dtype='uint8')
+    >>> dat[:,1] = 40*np.arange(3); dat[:,2] = dat[:,1]+10
     >>> buff = StringIO()
     >>> write_gcode( dat, fl=buff )
     >>> _ = buff.seek(0)
     >>> ''.join(buff.readlines())
-    u'M107\nG1 X20.1 Y20.0 F2000\n\nM106 S90\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F2000\n\nM106 S90\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F2000\n\n'
+    u'M107\nG1 X20.1 Y20.0 F2000\nM106 S96\nG1 X20.15 Y20.0 F70\n\nM107\nG1 X20.15 Y20.05 F2000\nM106 S122\nG1 X20.1 Y20.05 F70\nM106 S115\nG1 X20.05 Y20.05 F70\n\nM107\nG1 X20.05 Y20.1 F2000\nM106 S141\nG1 X20.1 Y20.1 F70\nM106 S148\nG1 X20.15 Y20.1 F70\n\n'
     '''
-    lst = 0
-    for y in range( 0, dat.shape[0]):
-        if all( dat[y,:]>0 ): continue # Skip empty lines
-        drcn = y % 2
-        sta = int(       drcn  * (dat.shape[1]-1)        )
-        end = int(  (not drcn) * (dat.shape[1]  ) - drcn )
-        for x in range( sta, end, 1-2*drcn ):
+    rvsd = lst = 0
+    xrng = range(dat.shape[1])
+    for y in range(dat.shape[0]):
+        for x in reversed(xrng) if rvsd else xrng:
             val = dat[y,x]
             if val != lst:
                 if not lst:
                     fl.write(
                         loff +"\n"+
-                        'G1 X'+ trfx(x+drcn) +' Y'+ trfy(y) +' F'+ str(mvspd) +"\n"
+                        'G1 X'+ trfx(x+rvsd) +' Y'+ trfy(y) +' F'+ str(mvspd) +"\n"
                     )
                 else:
                     fl.write(
-                        lon +' S'+ trfv(val) +"\n"+
-                        'G1 X'+ trfx(x+drcn) +' Y'+ trfy(y) +' F'+ str(lowspd) +"\n"
+                        lon +' S'+ trfv(lst) +"\n"+
+                        'G1 X'+ trfx(x+rvsd) +' Y'+ trfy(y) +' F'+ str(lowspd) +"\n"
                     )
                 lst = val
+        rvsd = not rvsd
         fl.write("\n")
+
+
+# Coordinate transformations for `write_gcode(...)`.
+def trfx( x ): return str( x*(1.0/tdpi*25.4) + xfst )
+def trfy( y ): return str( y*(1.0/tdpi*25.4) + yfst )
+def trfv( v ): return str( int( lint + v/255*(fint - lint) ) )
 
 
 def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
@@ -274,12 +280,6 @@ def load_svg( fn, dpi, clp, w, h ):
     return load_img(buff, dpi, clp, dpi, dpi, w, h)
 
 
-# Coordinate transform functions for for `write_gcode(...)`.
-def trfx( x ): return str( x*(1.0/tdpi*25.4) + xfst )
-def trfy( y ): return str( y*(1.0/tdpi*25.4) + yfst )
-def trfv( v ): return str( int( lint + v/255*(fint - lint) ) )
-
-
 def write_ngrv_file(infl, outfl):
     '''Make a gcode raster for engraving from an input image.'''
     try:
@@ -318,15 +318,15 @@ def run_tests():
     sys.exit( doctest.testmod(
             m=sys.modules.get('img2ngrv'),
             verbose=True
-    )[0])
+    )[0] )
 
 
 def main():
     # Argument handling and all the boring bookkeeping stuff
-    progname = os.path.splitext(os.path.basename( __file__ ))[0]
-    vstring = (' v0.4\nWritten by con-f-use@gmx.net\n'
-               '(Sat Sep 14 12:01:51 CEST 2016) on confusion' )
-    args = docopt(__doc__.format(progname=progname,**globals()), version=progname+vstring)
+    pnm = os.path.splitext(os.path.basename( __file__ ))[0]
+    vstr = (' v0.5\nWritten by con-f-use@gmx.net\n'
+            '(Sat Sep 17 17:17:54 CEST 2016) on confusion' )
+    args = docopt(__doc__.format(progname=pnm,**globals()), version=pnm+vstr)
     if args['--test']: run_tests()
     verb    = logging.ERROR - int(args['--verbose'])*10
     logging.basicConfig(
@@ -345,16 +345,16 @@ def main():
     altm    =      args['--alternate-mode']
     lint    = int( args['--engraver-threshold'] )
     fint    = int( args['--engraver-max']       )
+    lghtspd = int( args['--light-speed'] )
+    lowspd  = int( args['--low-speed']   )
+    mvspd   = int( args['--move-speed']  )
+    tdpi    = int( tdpi.to('dpi').magnitude )
     tdpi    = ureg.parse_expression(args['--target-resolution'])
     xfst    = ureg.parse_expression(args['--x-offset'])
     yfst    = ureg.parse_expression(args['--y-offset'])
     if tdpi.dimensionality == '[length]': tdpi = 1.0/tdpi
-    tdpi = int( tdpi.to('dpi').magnitude )
-    xfst = float( xfst.to('mm').magnitude )
-    yfst = float( yfst.to('mm').magnitude )
-    lghtspd = int( args['--light-speed'] )
-    lowspd  = int( args['--low-speed']   )
-    mvspd   = int( args['--move-speed']  )
+    xfst    = float( xfst.to('mm').magnitude )
+    yfst    = float( yfst.to('mm').magnitude )
     lson = lon +' S'+ str(lint)
     lfon = lon +' S'+ str(fint)
 
