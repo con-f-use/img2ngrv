@@ -28,27 +28,27 @@ Options:
     -b --black-and-white            Set every pixel non-zero pixel to maximum
                                         intensity
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
-                                       [default: {tdpi}dpi]
+                                       [default: 508dpi]
     -c --clip=<float>               Threshold pixel value to be interpreted
-                                        as "black" [default: {clp}]
+                                        as "black" [default: 1]
     -1 --on-command=<str>           Command to turn the engraver on
-                                       [default: {lon}]
+                                       [default: M106]
     -0 --off-command=<str>          Command to turn the engraver off
-                                       [default: {loff}]
+                                       [default: M107]
     -f --light-speed=<float>        Speed for light engraving
-                                       [default: {lghtspd}]
+                                       [default: 500]
     -l --low-speed=<float>          Speed for full engraving
-                                       [default: {lowspd}]
+                                       [default: 70]
     -m --move-speed=<float>         Speed when moving without engraving
-                                       [default: {mvspd}]
+                                       [default: 2000]
     -t --engraver-threshold=<int>   Threshold driving value for the engraver
-                                       [default: {lint}]
+                                       [default: 90]
     -M --engraver-max=<int>         Maximal driving value for the engraver
-                                       [default: {fint}]
+                                       [default: 255]
     -x --x-offset=<float>           Offset from zero position in x-direction
-                                       [default: {xfst}mm]
+                                       [default: 20.0mm]
     -y --y-offset=<float>           Offset from zero position in y-direction
-                                       [default: {yfst}mm]
+                                       [default: 20.0mm]
     -p --preamble=<filename>        Textfile containing the to be preamble of
                                         the output G-Code
     -f --footer=<filename>          Textfile containing the to be footer of
@@ -64,7 +64,7 @@ from io import StringIO
 import numpy as np
 import pint
 import matplotlib.pyplot as plt
-from docopt import docopt
+import docopt
 from PIL import Image
 
 __version__      = 'v0.4-18'
@@ -77,24 +77,7 @@ __vstring__ = '{} {}\nWritten by {}'.format( __package__, __version__,
 
 #=======================================================================
 
-loff = 'M107'
-lon  = 'M106'
-fint = 255
-lint = 90
-lfon = lon +' S'+ str(fint)
-lson = lon +' S'+ str(lint)
-verb = 0
-tdpi = 508
-lghtspd = 500
-lowspd = 70
-mvspd = 2000
-xfst = 20.0
-yfst = 20.0
-clp = 1
-nvrt = False
-bw = False
-flplr = False
-altm = False
+a = docopt.docopt(__doc__,[])
 
 tm = time.strftime('%c')
 
@@ -156,7 +139,7 @@ ureg.define('dotsperinch = 1/25.4/mm = dpi')
 
 
 def write_gcode( dat, lon=lon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.stdout ):
-    r'''Traverses `dat` in zic-sac to create a gcode raster of it.
+    r'''Traverses input pixel array `dat` in zic-zac fashion to create a gcode raster of it.
 
     Example:
     >>> dat = np.zeros((3,4),dtype='uint8')
@@ -335,12 +318,32 @@ def run_tests():
     )[0] )
 
 
+def convert_cmd_args():
+    global a
+    a = docopt.Dict({re.sub('^--', '', k): v for k, v in args.items()})
+    for arg in ('engraver-threshold', 'engraver-max', 'light-speed', 'low-speed', 'move-speed'):
+        a[arg] = int(a[arg])
+    for arg in ('target-resolution', 'x-offset', 'y-offset')
+        a[arg] = ureg.parse_expression(a[arg])
+    if a['target-resolution'].dimensionality == '[length]': a['target-resolution'] = 1.0/a['target-resolution']
+    tdpi    = int( tdpi.to('dpi').magnitude )
+    a['x-offset']    = float( a['x-offset'].to('mm').magnitude )
+    a['y-offset']    = float( a['y-offset'].to('mm').magnitude )
+    lson = lon +' S'+ str(lint)
+    lfon = lon +' S'+ str(fint)
+    if a['preamble']:
+        with open(a['preamble']) as fh:
+            pre = ''.join(fh.readlines())
+    if a['footer']:
+        with open(a['footer']  ) as fh:
+            post = ''.join(fh.readlines())
+
+
 def main():
     # Argument handling and all the boring bookkeeping stuff
-    args = docopt(__doc__.format(**globals()), version=__vstring__)
+    a = docopt.docopt(__doc__.format(**globals()), version=__vstring__)
     #options = {re.match('\{(.*)\}',o.value).group(1): re.sub('^--', '', o.name) for o in docopt.parse_defaults(dm) if o.value and re.match('\{.*\}',o.value)}
-    #args = {re.sub('^--', '', k): v for k, v in args.items()}
-    if args['--test']: run_tests()
+    if a['test']: run_tests()
     verb    = logging.ERROR - int(args['--verbose'])*10
     logging.basicConfig(
         level   = verb,
@@ -348,34 +351,6 @@ def main():
                   '%(filename)s:%(lineno)s) %(message)s',
         datefmt = '%y%m%d %H:%M'   #, stream=, mode=, filename=
     )
-    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon, fint, lint, bw, flplr, altm
-    lon     =      args['--on-command']
-    loff    =      args['--off-command']
-    nvrt    =      args['--invert']
-    bw      =      args['--black-and-white']
-    flplr   =      args['--mirror']
-    clp     =      args['--clip']
-    altm    =      args['--alternate-mode']
-    lint    = int( args['--engraver-threshold'] )
-    fint    = int( args['--engraver-max']       )
-    lghtspd = int( args['--light-speed']        )
-    lowspd  = int( args['--low-speed']          )
-    mvspd   = int( args['--move-speed']         )
-    tdpi    = ureg.parse_expression(args['--target-resolution'])
-    xfst    = ureg.parse_expression(args['--x-offset'])
-    yfst    = ureg.parse_expression(args['--y-offset'])
-    if tdpi.dimensionality == '[length]': tdpi = 1.0/tdpi
-    tdpi    = int( tdpi.to('dpi').magnitude )
-    xfst    = float( xfst.to('mm').magnitude )
-    yfst    = float( yfst.to('mm').magnitude )
-    lson = lon +' S'+ str(lint)
-    lfon = lon +' S'+ str(fint)
-    if args['--preamble']:
-        with open(args['--preamble']) as fh:
-            pre = ''.join(fh.readlines())
-    if args['--footer']:
-        with open(args['--footer']  ) as fh:
-            post = ''.join(fh.readlines())
 
     write_ngrv_file( args['INFILE'], args['OUTFILE'] )
 
