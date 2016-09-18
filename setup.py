@@ -15,7 +15,7 @@ def get_field(field):
 try:
     vstr = subprocess.check_output([ 'git', 'describe', '--abbrev=5',
         '--dirty=-dev', '--always', '--tags' ])
-    _version = ' '.join(str(vstr).split())
+    _version = ' '.join(vstr.decode('ascii', 'ignore').split())
     flnm = os.path.join(os.path.dirname(__file__), infln)
     for line in fileinput.input(flnm, inplace=True, backup='.bak'):
         line = re.sub(

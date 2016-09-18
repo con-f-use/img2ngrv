@@ -63,7 +63,7 @@ import matplotlib.pyplot as plt
 from docopt import docopt
 from PIL import Image
 
-__version__      = 'v0.4-16'
+__version__      = 'v0.4-17'
 __author__       = 'con-f-use'
 __author_email__ = 'con-f-use@gmx.net'
 __url__          = 'https://github.com/con-f-use/img2ngrv'
