@@ -5,14 +5,15 @@ Convert common image formats to G-code.
 
 Program is optimized for a lulzbut Mini with a 1W engraving laser and tested
 with KiCad .svg and .png plots as input. Usage with anything else than that
-may prove difficult.
+may prove difficult. When units are required, the program should accept the
+most common ones (SI and imperial).
 
 See: {__url__}
 
 ToDo:
- - Incorporate git version in this module
  - Think about changing engrving speed with pixel value as well
  - Turn this mess into classes
+ - Change variable names to reflect argument dict
 
 Usage:
     {__package__} --help | --version | --test
@@ -27,7 +28,7 @@ Options:
     -a --alternate-mode             Fix rare issue with svg tranparency
     -b --black-and-white            Set every pixel non-zero pixel to maximum
                                         intensity
-    -r --target-resolution=<float>  Target resolution (dpi or diameter)
+    -r --target-resolution=<res>    Target resolution (dpi or diameter)
                                        [default: 508dpi]
     -c --clip=<float>               Threshold pixel value to be interpreted
                                         as "black" [default: 1]
@@ -45,9 +46,9 @@ Options:
                                        [default: 90]
     -M --engraver-max=<int>         Maximal driving value for the engraver
                                        [default: 255]
-    -x --x-offset=<float>           Offset from zero position in x-direction
+    -x --x-offset=<len>             Offset from zero position in x-direction
                                        [default: 20.0mm]
-    -y --y-offset=<float>           Offset from zero position in y-direction
+    -y --y-offset=<len>             Offset from zero position in y-direction
                                        [default: 20.0mm]
     -p --preamble=<filename>        Textfile containing the to be preamble of
                                         the output G-Code
@@ -67,7 +68,7 @@ import matplotlib.pyplot as plt
 import docopt
 from PIL import Image
 
-__version__      = 'v0.4-18'
+__version__      = 'v0.4-19-g68e96-dev'
 __author__       = 'con-f-use'
 __author_email__ = 'con-f-use@gmx.net'
 __url__          = 'https://github.com/con-f-use/img2ngrv'
@@ -77,7 +78,8 @@ __vstring__ = '{} {}\nWritten by {}'.format( __package__, __version__,
 
 #=======================================================================
 
-a = docopt.docopt(__doc__,[])
+#defaults = convert_cmd_args(docopt.docopt(__doc__,['.']))
+defaults = docopt.docopt(__doc__,['.'])
 
 tm = time.strftime('%c')
 
@@ -138,7 +140,7 @@ ureg = pint.UnitRegistry()
 ureg.define('dotsperinch = 1/25.4/mm = dpi')
 
 
-def write_gcode( dat, lon=lon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.stdout ):
+def write_gcode( dat, lon='', loff='', lowspd='', mvspd='', fl=sys.stdout ):
     r'''Traverses input pixel array `dat` in zic-zac fashion to create a gcode raster of it.
 
     Example:
@@ -318,41 +320,51 @@ def run_tests():
     )[0] )
 
 
-def convert_cmd_args():
-    global a
-    a = docopt.Dict({re.sub('^--', '', k): v for k, v in args.items()})
-    for arg in ('engraver-threshold', 'engraver-max', 'light-speed', 'low-speed', 'move-speed'):
-        a[arg] = int(a[arg])
-    for arg in ('target-resolution', 'x-offset', 'y-offset')
-        a[arg] = ureg.parse_expression(a[arg])
-    if a['target-resolution'].dimensionality == '[length]': a['target-resolution'] = 1.0/a['target-resolution']
-    tdpi    = int( tdpi.to('dpi').magnitude )
-    a['x-offset']    = float( a['x-offset'].to('mm').magnitude )
-    a['y-offset']    = float( a['y-offset'].to('mm').magnitude )
-    lson = lon +' S'+ str(lint)
-    lfon = lon +' S'+ str(fint)
+class Bunch(docopt.Dict):
+    def __init__(self, dict_):
+        docopt.Dict.__init__(self, dict_)
+        self.__dict__.update(dict_)
+
+
+def convert_cmd_args(a):
+    #options = {re.match('\{(.*)\}',o.value).group(1): re.sub('^--', '', o.name) for o in docopt.parse_defaults(dm) if o.value and re.match('\{.*\}',o.value)}
+    a = {re.sub('^--', '', k).replace('-','_'): v for k, v in a.items()}
+    a['lson'] = a['on_command']  +' S'+ a['engraver_threshold']
+    a['lfon'] = a['off_command'] +' S'+ a['engraver_max']
     if a['preamble']:
         with open(a['preamble']) as fh:
             pre = ''.join(fh.readlines())
     if a['footer']:
         with open(a['footer']  ) as fh:
             post = ''.join(fh.readlines())
+    for arg in ['engraver_threshold', 'engraver_max', 'light_speed', 'low_speed', 'move_speed', 'clip']:
+        a[arg] = int(a[arg])
+    for arg in ['target_resolution', 'x_offset', 'y_offset']:
+        a[arg] = ureg.parse_expression(a[arg])
+    if a['target_resolution'].dimensionality == '[length]':
+        a['target_resolution'] = 1.0/a['target_resolution']
+    a['target_resolution'] = int(
+        a['target_resolution'].to('dpi').magnitude )
+    a['x_offset']    = float( a['x_offset'].to('mm').magnitude )
+    a['y_offset']    = float( a['y_offset'].to('mm').magnitude )
+    a['verbose']     = logging.ERROR - int(a['verbose'])*10
+    return Bunch(a)
 
 
 def main():
     # Argument handling and all the boring bookkeeping stuff
     a = docopt.docopt(__doc__.format(**globals()), version=__vstring__)
-    #options = {re.match('\{(.*)\}',o.value).group(1): re.sub('^--', '', o.name) for o in docopt.parse_defaults(dm) if o.value and re.match('\{.*\}',o.value)}
+    a = convert_cmd_args(a)
     if a['test']: run_tests()
-    verb    = logging.ERROR - int(args['--verbose'])*10
+    print(a)
     logging.basicConfig(
-        level   = verb,
+        level   = a.verbose,
         format  = '[%(levelname)-7.7s] (%(asctime)s '
                   '%(filename)s:%(lineno)s) %(message)s',
         datefmt = '%y%m%d %H:%M'   #, stream=, mode=, filename=
     )
 
-    write_ngrv_file( args['INFILE'], args['OUTFILE'] )
+    write_ngrv_file( a.INFILE, a.OUTFILE )
 
 
 if __name__ == '__main__':
