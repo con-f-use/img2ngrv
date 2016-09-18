@@ -21,12 +21,12 @@ Options:
                                        messages (and plot a preview)
     --test                          Test componentts of this program and exit
     -i --invert                     Invert pixels of input image
+    -m --mirror                     Flip left and right
     -a --alternate-mode             Fix rare issue with svg tranparency
     -b --black-and-white            Set every pixel non-zero pixel to maximum
                                         intensity
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
                                        [default: {tdpi}dpi]
-    -m --mirror                     Flip left and right
     -c --clip=<float>               Threshold pixel value to be interpreted
                                     as "black" [default: {clp}]
     -1 --on-command=<str>           Command to turn the engraver on
@@ -327,6 +327,8 @@ def main():
     vstr = (' v0.5\nWritten by con-f-use@gmx.net\n'
             '(Sat Sep 17 17:17:54 CEST 2016) on confusion' )
     args = docopt(__doc__.format(progname=pnm,**globals()), version=pnm+vstr)
+    #options = {re.match('\{(.*)\}',o.value).group(1): re.sub('^--', '', o.name) for o in docopt.parse_defaults(dm) if o.value and re.match('\{.*\}',o.value)}
+    #args = {re.sub('^--', '', k): v for k, v in args.items()}
     if args['--test']: run_tests()
     verb    = logging.ERROR - int(args['--verbose'])*10
     logging.basicConfig(
@@ -348,11 +350,11 @@ def main():
     lghtspd = int( args['--light-speed'] )
     lowspd  = int( args['--low-speed']   )
     mvspd   = int( args['--move-speed']  )
-    tdpi    = int( tdpi.to('dpi').magnitude )
     tdpi    = ureg.parse_expression(args['--target-resolution'])
     xfst    = ureg.parse_expression(args['--x-offset'])
     yfst    = ureg.parse_expression(args['--y-offset'])
     if tdpi.dimensionality == '[length]': tdpi = 1.0/tdpi
+    tdpi    = int( tdpi.to('dpi').magnitude )
     xfst    = float( xfst.to('mm').magnitude )
     yfst    = float( yfst.to('mm').magnitude )
     lson = lon +' S'+ str(lint)
