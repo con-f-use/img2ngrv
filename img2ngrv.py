@@ -7,14 +7,16 @@ Program is optimized for a lulzbut Mini with a 1W engraving laser and tested
 with KiCad .svg and .png plots as input. Usage with anything else than that
 may prove difficult.
 
+See: {__url__}
+
 ToDo:
  - Incorporate git version in this module
  - Think about changing engrving speed with pixel value as well
  - Turn this mess into classes
 
 Usage:
-    {progname} --help | --version | --test
-    {progname} [options] [-v...] INFILE [OUTFILE]
+    {__package__} --help | --version | --test
+    {__package__} [options] [-v...] INFILE [OUTFILE]
 
 Options:
     -v --verbose                    Specify (multiply) to increase output
@@ -60,6 +62,14 @@ import pint
 import matplotlib.pyplot as plt
 from docopt import docopt
 from PIL import Image
+
+__version__      = 'v0.4-15'
+__author__       = 'con-f-use'
+__author_email__ = 'con-f-use@gmx.net'
+__url__          = 'https://github.com/con-f-use/img2ngrv'
+__package__ = os.path.splitext(os.path.basename( __file__ ))[0]
+__vstring__ = '{} {}\nWritten by {}'.format( __package__, __version__,
+                                              __author__                )
 
 #=======================================================================
 
@@ -323,10 +333,7 @@ def run_tests():
 
 def main():
     # Argument handling and all the boring bookkeeping stuff
-    pnm = os.path.splitext(os.path.basename( __file__ ))[0]
-    vstr = (' v0.5\nWritten by con-f-use@gmx.net\n'
-            '(Sat Sep 17 17:17:54 CEST 2016) on confusion' )
-    args = docopt(__doc__.format(progname=pnm,**globals()), version=pnm+vstr)
+    args = docopt(__doc__.format(**globals()), version=__vstring__)
     #options = {re.match('\{(.*)\}',o.value).group(1): re.sub('^--', '', o.name) for o in docopt.parse_defaults(dm) if o.value and re.match('\{.*\}',o.value)}
     #args = {re.sub('^--', '', k): v for k, v in args.items()}
     if args['--test']: run_tests()
