@@ -22,15 +22,15 @@ Options:
     -v --verbose                    Specify (multiply) to increase output
                                        messages (and plot a preview)
     --test                          Test componentts of this program and exit
-    -i --invert                     Invert pixels of input image
-    -m --mirror                     Flip left and right
+    -i --invert                     Invert pixel value of input image
+    -m --mirror                     Flip input image left to right
     -a --alternate-mode             Fix rare issue with svg tranparency
     -b --black-and-white            Set every pixel non-zero pixel to maximum
                                         intensity
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
                                        [default: {tdpi}dpi]
     -c --clip=<float>               Threshold pixel value to be interpreted
-                                    as "black" [default: {clp}]
+                                        as "black" [default: {clp}]
     -1 --on-command=<str>           Command to turn the engraver on
                                        [default: {lon}]
     -0 --off-command=<str>          Command to turn the engraver off
@@ -49,6 +49,10 @@ Options:
                                        [default: {xfst}mm]
     -y --y-offset=<float>           Offset from zero position in y-direction
                                        [default: {yfst}mm]
+    -p --preamble=<filename>        Textfile containing the to be preamble of
+                                        the output G-Code
+    -f --footer=<filename>          Textfile containing the to be footer of
+                                        the output G-Code
 '''
 
 #=======================================================================
@@ -63,7 +67,7 @@ import matplotlib.pyplot as plt
 from docopt import docopt
 from PIL import Image
 
-__version__      = 'v0.4-17'
+__version__      = 'v0.4-18'
 __author__       = 'con-f-use'
 __author_email__ = 'con-f-use@gmx.net'
 __url__          = 'https://github.com/con-f-use/img2ngrv'
@@ -354,9 +358,9 @@ def main():
     altm    =      args['--alternate-mode']
     lint    = int( args['--engraver-threshold'] )
     fint    = int( args['--engraver-max']       )
-    lghtspd = int( args['--light-speed'] )
-    lowspd  = int( args['--low-speed']   )
-    mvspd   = int( args['--move-speed']  )
+    lghtspd = int( args['--light-speed']        )
+    lowspd  = int( args['--low-speed']          )
+    mvspd   = int( args['--move-speed']         )
     tdpi    = ureg.parse_expression(args['--target-resolution'])
     xfst    = ureg.parse_expression(args['--x-offset'])
     yfst    = ureg.parse_expression(args['--y-offset'])
@@ -366,6 +370,12 @@ def main():
     yfst    = float( yfst.to('mm').magnitude )
     lson = lon +' S'+ str(lint)
     lfon = lon +' S'+ str(fint)
+    if args['--preamble']:
+        with open(args['--preamble']) as fh:
+            pre = ''.join(fh.readlines())
+    if args['--footer']:
+        with open(args['--footer']  ) as fh:
+            post = ''.join(fh.readlines())
 
     write_ngrv_file( args['INFILE'], args['OUTFILE'] )
 

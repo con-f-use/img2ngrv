@@ -6,7 +6,7 @@ import os, re, ast, subprocess, fileinput
 infln = 'img2ngrv.py'
 
 def get_field(field):
-    regex = re.compile(r'^\s*__{}__\s*=\s*(.*)'.format(field), flags=re.M)
+    regex = re.compile(r'^\s*__'+field+r'__\s*=\s*(.*)', flags=re.M)
     with open(infln, 'rb') as f:
         value = str( ast.literal_eval(
             regex.search( f.read().decode('utf-8') ).group(1)   ) )
