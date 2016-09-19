@@ -56,7 +56,7 @@ Options:
                                         the output G-Code
 '''
 
-#=======================================================================
+
 
 from __future__ import division, print_function, unicode_literals
 from logging import info, debug, error, warning as warn
@@ -68,7 +68,7 @@ import matplotlib.pyplot as plt
 import docopt
 from PIL import Image
 
-__version__      = 'v0.4-19-g68e96-dev'
+__version__      = 'v0.4-21'
 __author__       = 'con-f-use'
 __author_email__ = 'con-f-use@gmx.net'
 __url__          = 'https://github.com/con-f-use/img2ngrv'
@@ -78,11 +78,6 @@ __vstring__ = '{} {}\nWritten by {}'.format( __package__, __version__,
 
 #=======================================================================
 
-#defaults = convert_cmd_args(docopt.docopt(__doc__,['.']))
-defaults = docopt.docopt(__doc__,['.'])
-
-tm = time.strftime('%c')
-
 pre = ''';This Gcode has been generated specifically for the LulzBot Mini
 ;It assumes the engraver (laser) is controlled by fan1 output
 ;Creation Date: {tm}
@@ -91,12 +86,12 @@ G26                          ; clear potential 'probe fail' condition
 G21                          ; metric values
 G90                          ; absolute positioning
 M82                          ; set extruder to absolute mode
-{loff}                         ; start with the fan off
+{off_command}                         ; start with the fan off
 M104 S0                      ; hotend off
 M140 S0                      ; heated bed heater off (if you have it)
 G92 E0                       ; set extruder position to 0
 G28                          ; home all
-G1 Z25  F{mvspd}                ; CRITICAL: set Z
+G1 Z25  F{move_speed}                ; CRITICAL: set Z
 G28 X0 Y0                    ; home x and y
 M204 S300                    ; Set probing acceleration
 G29                          ; Probe
@@ -110,15 +105,15 @@ G4 S100                      ; dwell to allow for laser focusing
 ; Bounding box for placement
 G1 X{x0} Y{y0} ; Start (lower left corner)
 {lfon}
-G1 X{x1} Y{y0} F{lghtspd} ; Lower right
-G1 X{x1} Y{y1} F{lghtspd} ; Upper right
-G1 X{x0} Y{y1} F{lghtspd} ; Upper left
-G1 X{x0} Y{y0} F{lghtspd} ; Lower left
-{loff}
+G1 X{x1} Y{y0} F{light_speed} ; Lower right
+G1 X{x1} Y{y1} F{light_speed} ; Upper right
+G1 X{x0} Y{y1} F{light_speed} ; Upper left
+G1 X{x0} Y{y0} F{light_speed} ; Lower left
+{off-command}
 G4 S100 ; Dwell for positioning
 {lson}
-G1 X{x0} Y{y1} F{lghtspd} ; Warning movement
-G1 X{x0} Y{y0} F{lghtspd} ; Warning movement
+G1 X{x0} Y{y1} F{light_speed} ; Warning movement
+G1 X{x0} Y{y0} F{light_speed} ; Warning movement
 G4 S5   ; Dwell to let warning sink in
 
 ; Start Engraving
@@ -128,16 +123,13 @@ post = '''\
 ; End Engraving
 
 ; Cleanup
-{lon} S0                                      ; laser off
-{loff}                                         ; laser really off
+{on-command} S0                                      ; laser off
+{off_command}                                         ; laser really off
 M104 S0                                      ; hotend off
 M140 S0                                      ; heated bed off
 M84                                          ; steppers off
 G90                                          ; absolute positioning
 '''
-
-ureg = pint.UnitRegistry()
-ureg.define('dotsperinch = 1/25.4/mm = dpi')
 
 
 def write_gcode( dat, lon='', loff='', lowspd='', mvspd='', fl=sys.stdout ):
@@ -177,6 +169,31 @@ def write_gcode( dat, lon='', loff='', lowspd='', mvspd='', fl=sys.stdout ):
 def trfx( x ): return str( x*(1.0/tdpi*25.4) + xfst )
 def trfy( y ): return str( y*(1.0/tdpi*25.4) + yfst )
 def trfv( v ): return str( int( lint + v/255*(fint - lint) ) )
+
+
+def write_ngrv_file(**a):
+    '''Make a gcode raster for engraving from an input image.'''
+    try:
+        dat = load_svg(infl, tdpi, clp, None, None)
+    except:
+        try:
+            dat = load_img(infl, tdpi, clp, None, None, None, None)
+        except:
+            raise
+
+    # Preview if verbose
+    if verb <= logging.WARNING:
+        prevw_ngrv(infl, dat)
+
+    # Write File
+    fl = open( outfl, 'w' ) if outfl else sys.stdout
+    x0, y0 = trfx(0), trfy(0)
+    x1, y1 = trfx(dat.shape[1]), trfy(dat.shape[0])
+    allvars = dict(globals(), **locals())
+
+    fl.write( pre.format(**allvars) )
+    write_gcode( dat, a.lfon, a.loff, a.low_speed, a.move_speed, fl )
+    fl.write( post.format( **globals() ) )
 
 
 def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
@@ -279,29 +296,8 @@ def load_svg( fn, dpi, clp, w, h ):
     return load_img(buff, dpi, clp, dpi, dpi, w, h)
 
 
-def write_ngrv_file(infl, outfl):
-    '''Make a gcode raster for engraving from an input image.'''
-    try:
-        dat = load_svg(infl, tdpi, clp, None, None)
-    except:
-        try:
-            dat = load_img(infl, tdpi, clp, None, None, None, None)
-        except:
-            raise
-
-    # Preview if verbose
-    if verb <= logging.WARNING:
-        prevw_ngrv(infl, dat)
-
-    # Write File
-    fl = open( outfl, 'w' ) if outfl else sys.stdout
-    x0, y0 = trfx(0), trfy(0)
-    x1, y1 = trfx(dat.shape[1]), trfy(dat.shape[0])
-    allvars = dict(globals(), **locals())
-
-    fl.write( pre.format(**allvars) )
-    write_gcode( dat, lfon, loff, lowspd, mvspd, fl )
-    fl.write( post.format( **globals() ) )
+#=======================================================================
+# From here on its argument handling and boring book keeping stuff
 
 
 def run_tests():
@@ -325,46 +321,55 @@ class Bunch(docopt.Dict):
         docopt.Dict.__init__(self, dict_)
         self.__dict__.update(dict_)
 
+    def __setitem__(self, key, value):
+        self.__dict__[key] = value
+        docopt.Dict.__setitem__(self, key, value)
+
+
+ureg = pint.UnitRegistry()
+ureg.define('dotsperinch = 1/25.4/mm = dpi')
+
 
 def convert_cmd_args(a):
-    #options = {re.match('\{(.*)\}',o.value).group(1): re.sub('^--', '', o.name) for o in docopt.parse_defaults(dm) if o.value and re.match('\{.*\}',o.value)}
-    a = {re.sub('^--', '', k).replace('-','_'): v for k, v in a.items()}
-    a['lson'] = a['on_command']  +' S'+ a['engraver_threshold']
-    a['lfon'] = a['off_command'] +' S'+ a['engraver_max']
-    if a['preamble']:
-        with open(a['preamble']) as fh:
+    a = {re.sub('^--', '', k).replace('-','_').lower(): v for k, v in a.items()}
+    a = Bunch(a)
+    a['lson'] = a.on_command  +' S'+ a.engraver_threshold
+    a['lfon'] = a.off_command +' S'+ a.engraver_max
+    if a.preamble:
+        with open(a.preamble) as fh:
             pre = ''.join(fh.readlines())
-    if a['footer']:
-        with open(a['footer']  ) as fh:
+    if a.footer:
+        with open(a.footer) as fh:
             post = ''.join(fh.readlines())
-    for arg in ['engraver_threshold', 'engraver_max', 'light_speed', 'low_speed', 'move_speed', 'clip']:
-        a[arg] = int(a[arg])
     for arg in ['target_resolution', 'x_offset', 'y_offset']:
         a[arg] = ureg.parse_expression(a[arg])
-    if a['target_resolution'].dimensionality == '[length]':
-        a['target_resolution'] = 1.0/a['target_resolution']
-    a['target_resolution'] = int(
-        a['target_resolution'].to('dpi').magnitude )
-    a['x_offset']    = float( a['x_offset'].to('mm').magnitude )
-    a['y_offset']    = float( a['y_offset'].to('mm').magnitude )
-    a['verbose']     = logging.ERROR - int(a['verbose'])*10
-    return Bunch(a)
+    for arg in ['x_offset','y_offset']:
+        a[arg] = float(a[arg].to('mm').magnitude)
+    if a.target_resolution.dimensionality == '[length]':
+        a['target_resolution'] = 1.0/a.target_resolution
+    a['target_resolution'] = a.target_resolution.to('dpi').magnitude
+    for arg in ['engraver_threshold', 'engraver_max', 'light_speed', 'low_speed', 'move_speed', 'clip', 'target_resolution']:
+        a[arg] = int(a[arg])
+    a['verbose'] = logging.ERROR - int(a.verbose)*10
+    return a
+
+
+defaults = convert_cmd_args(docopt.docopt(__doc__,['.']))
+#defaults = docopt.docopt(__doc__,['.'])
+tm = time.strftime('%c')
 
 
 def main():
-    # Argument handling and all the boring bookkeeping stuff
     a = docopt.docopt(__doc__.format(**globals()), version=__vstring__)
     a = convert_cmd_args(a)
     if a['test']: run_tests()
-    print(a)
     logging.basicConfig(
         level   = a.verbose,
         format  = '[%(levelname)-7.7s] (%(asctime)s '
                   '%(filename)s:%(lineno)s) %(message)s',
         datefmt = '%y%m%d %H:%M'   #, stream=, mode=, filename=
     )
-
-    write_ngrv_file( a.INFILE, a.OUTFILE )
+    write_ngrv_file( **a )
 
 
 if __name__ == '__main__':
