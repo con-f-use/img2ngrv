@@ -13,6 +13,7 @@ ToDo:
  - Think about changing engrving speed with pixel value as well
  - Do python variant of 'inkscape --verb=FitCanvasToDrawing --verb=FileSave --verb=FileClose *.svg' before hand (maybe https://github.com/skagedal/svgclip)
  - Cleapup code
+ - Fix bug in setup.py that causes img2ngrv.py to empty
 
 Usage:
     {__package__} --help | --version | --test
