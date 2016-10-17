@@ -10,9 +10,9 @@ may prove difficult.
 See: {__url__}
 
 ToDo:
- - Incorporate git version in this module
  - Think about changing engrving speed with pixel value as well
- - Turn this mess into classes
+ - Do python variant of 'inkscape --verb=FitCanvasToDrawing --verb=FileSave --verb=FileClose *.svg' before hand (maybe https://github.com/skagedal/svgclip)
+ - Cleapup code
 
 Usage:
     {__package__} --help | --version | --test
@@ -29,8 +29,8 @@ Options:
                                         intensity
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
                                        [default: {tdpi}dpi]
-    -c --clip=<float>               Threshold pixel value to be interpreted
-                                        as "black" [default: {clp}]
+    -c --clip=<int>                 Threshold pixel value to be interpreted
+                                        as engraver full on [default: {clp}]
     -1 --on-command=<str>           Command to turn the engraver on
                                        [default: {lon}]
     -0 --off-command=<str>          Command to turn the engraver off
@@ -167,13 +167,14 @@ def write_gcode( dat, lon=lon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.std
     >>> ''.join(buff.readlines())
     u'M107\nG1 X20.1 Y20.0 F2000\nM106 S96\nG1 X20.15 Y20.0 F70\n\nM107\nG1 X20.15 Y20.05 F2000\nM106 S122\nG1 X20.1 Y20.05 F70\nM106 S115\nG1 X20.05 Y20.05 F70\n\nM107\nG1 X20.05 Y20.1 F2000\nM106 S141\nG1 X20.1 Y20.1 F70\nM106 S148\nG1 X20.15 Y20.1 F70\n\n'
     '''
-    rvsd = lst = 0
+    rvsd = lst = force = 0
     xrng = range(dat.shape[1])
     for y in range(dat.shape[0]):
+        force = lst>0 # prevent line skipping
         for x in reversed(xrng) if rvsd else xrng:
             val = dat[y,x]
-            if val != lst:
-                if not lst:
+            if val != lst or force:
+                if lst<1:
                     fl.write(
                         loff +"\n"+
                         'G1 X'+ trfx(x+rvsd) +' Y'+ trfy(y) +' F'+ str(mvspd) +"\n"
@@ -184,6 +185,7 @@ def write_gcode( dat, lon=lon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.std
                         'G1 X'+ trfx(x+rvsd) +' Y'+ trfy(y) +' F'+ str(lowspd) +"\n"
                     )
                 lst = val
+                force = False
         rvsd = not rvsd
         fl.write("\n")
 
@@ -226,8 +228,11 @@ def prevw_ngrv(infl, dat):
     import tempfile
     nm = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
     mrrd = ' (mirrored)' if flplr else ''
-    plt.title('Engraving mask from '+ infl + mrrd)
-    plt.imshow( dat, interpolation='none', cmap='Greys' ) # Greys_r'
+    a = plt.imshow( dat, interpolation='none', cmap='Greys_r' ) # Greys_r'
+    clrcode = ''
+    if a.cmap.name == 'Greys': clrcode = '\nblack=substract; white=leave'
+    if a.cmap.name == 'Greys_r': clrcode = '\nblack=leave; white=substract'
+    plt.title('Engraving mask from '+ infl + mrrd + clrcode)
     plt.savefig(nm)
     plt.show()
     print( "Saved to '{}'".format(nm) )
@@ -249,7 +254,7 @@ def load_img( fn, tdpi, clp, dx, dy, w, h ):
     nw, nh = int(sclx*w), int(scly*h)
     debug( 'RSTR - sclx: %s (%s px - %s dpi), scly: %s (%s px - %s dpi)',
                        sclx,  w,     dx,          scly,  h,     dy        )
-    img = img.resize( (nw,nh), Image.BICUBIC ) # NEAREST
+    img = img.resize( (nw,nh), Image.BICUBIC ) # NEAREST, BICUBIC, BILINEAR, LANCZOS
     img.info['dpi'] = (tdpi, tdpi)
     dat = np.asarray( img, dtype='uint8' )
     dat.setflags(write=True)
@@ -315,7 +320,7 @@ def write_ngrv_file(infl, outfl):
     allvars = dict(globals(), **locals())
 
     fl.write( pre.format(**allvars) )
-    write_gcode( dat, lfon, loff, lowspd, mvspd, fl )
+    write_gcode( dat, lon, loff, lowspd, mvspd, fl )
     fl.write( post.format( **globals() ) )
 
 
@@ -348,14 +353,14 @@ def main():
                   '%(filename)s:%(lineno)s) %(message)s',
         datefmt = '%y%m%d %H:%M'   #, stream=, mode=, filename=
     )
-    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon, fint, lint, bw, flplr, altm
+    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon, fint, lint, bw, flplr, altm, clp
     lon     =      args['--on-command']
     loff    =      args['--off-command']
     nvrt    =      args['--invert']
     bw      =      args['--black-and-white']
-    flplr   =      args['--mirror']
-    clp     =      args['--clip']
     altm    =      args['--alternate-mode']
+    flplr   =      args['--mirror']
+    clp     = int( args['--clip']               )
     lint    = int( args['--engraver-threshold'] )
     fint    = int( args['--engraver-max']       )
     lghtspd = int( args['--light-speed']        )
