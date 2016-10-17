@@ -3,23 +3,35 @@
 '''
 Convert common image formats to G-code.
 
-Program is optimized of a lulzbut Mini with a 1W engraving laser and tested
-with KiCad plots as input. Usage with anything else at your own risk!
+Program is optimized for a lulzbut Mini with a 1W engraving laser and tested
+with KiCad .svg and .png plots as input. Usage with anything else than that
+may prove difficult.
+
+See: {__url__}
 
 ToDo:
- - Enable grayscale engraving
+ - Think about changing engrving speed with pixel value as well
+ - Do python variant of 'inkscape --verb=FitCanvasToDrawing --verb=FileSave --verb=FileClose *.svg' before hand (maybe https://github.com/skagedal/svgclip)
+ - Cleapup code
+ - Fix bug in setup.py that causes img2ngrv.py to empty
 
 Usage:
-    {progname} --help | --version | --test
-    {progname} [options] [-v...] INFILE [OUTFILE]
+    {__package__} --help | --version | --test
+    {__package__} [options] [-v...] INFILE [OUTFILE]
 
 Options:
     -v --verbose                    Specify (multiply) to increase output
-                                       messages
-    --test                          Test this program and exit
+                                       messages (and plot a preview)
+    --test                          Test componentts of this program and exit
+    -i --invert                     Invert pixel value of input image
+    -m --mirror                     Flip input image left to right
+    -a --alternate-mode             Fix rare issue with svg tranparency
+    -b --black-and-white            Set every pixel non-zero pixel to maximum
+                                        intensity
     -r --target-resolution=<float>  Target resolution (dpi or diameter)
                                        [default: {tdpi}dpi]
-    -i --invert                     Invert pixels of input image
+    -c --clip=<int>                 Threshold pixel value to be interpreted
+                                        as engraver full on [default: {clp}]
     -1 --on-command=<str>           Command to turn the engraver on
                                        [default: {lon}]
     -0 --off-command=<str>          Command to turn the engraver off
@@ -31,41 +43,59 @@ Options:
     -m --move-speed=<float>         Speed when moving without engraving
                                        [default: {mvspd}]
     -t --engraver-threshold=<int>   Threshold driving value for the engraver
-                                       [default: 90]
+                                       [default: {lint}]
     -M --engraver-max=<int>         Maximal driving value for the engraver
-                                       [default: 255]
+                                       [default: {fint}]
     -x --x-offset=<float>           Offset from zero position in x-direction
                                        [default: {xfst}mm]
     -y --y-offset=<float>           Offset from zero position in y-direction
                                        [default: {yfst}mm]
+    -p --preamble=<filename>        Textfile containing the to be preamble of
+                                        the output G-Code
+    -f --footer=<filename>          Textfile containing the to be footer of
+                                        the output G-Code
 '''
 
 #=======================================================================
 
 from __future__ import division, print_function, unicode_literals
 from logging import info, debug, error, warning as warn
-import sys, os, re, math, glob, logging, time
+import sys, os, re, logging, time
+from io import StringIO
 import numpy as np
 import pint
 import matplotlib.pyplot as plt
 from docopt import docopt
 from PIL import Image
-from io import StringIO
+
+__version__      = 'v0.4-21'
+__author__       = 'con-f-use'
+__author_email__ = 'con-f-use@gmx.net'
+__url__          = 'https://github.com/con-f-use/img2ngrv'
+__package__ = os.path.splitext(os.path.basename( __file__ ))[0]
+__vstring__ = '{} {}\nWritten by {}'.format( __package__, __version__,
+                                              __author__                )
 
 #=======================================================================
 
 loff = 'M107'
 lon  = 'M106'
-lfon = lon +' S255'
-lson = lon +' S90'
+fint = 255
+lint = 90
+lfon = lon +' S'+ str(fint)
+lson = lon +' S'+ str(lint)
 verb = 0
 tdpi = 508
-lghtspd = 300
+lghtspd = 500
 lowspd = 70
-mvspd = 1500
+mvspd = 2000
 xfst = 20.0
 yfst = 20.0
+clp = 1
 nvrt = False
+bw = False
+flplr = False
+altm = False
 
 tm = time.strftime('%c')
 
@@ -92,12 +122,10 @@ G4 S1                        ; pause
 M400                         ; clear buffer
 {lson}                     ; Turn on laser just enough to see it
 G4 S100                      ; dwell to allow for laser focusing
-G1 X0 Y0
 
 ; Bounding box for placement
 G1 X{x0} Y{y0} ; Start (lower left corner)
-{lon} S255
-G1 X{x0} Y{y0} F{lghtspd} ; Lower left
+{lfon}
 G1 X{x1} Y{y0} F{lghtspd} ; Lower right
 G1 X{x1} Y{y1} F{lghtspd} ; Upper right
 G1 X{x0} Y{y1} F{lghtspd} ; Upper left
@@ -128,71 +156,96 @@ ureg = pint.UnitRegistry()
 ureg.define('dotsperinch = 1/25.4/mm = dpi')
 
 
-def write_gcode( dat, lfon=lfon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.stdout ):
+def write_gcode( dat, lon=lon, loff=loff, lowspd=lowspd, mvspd=mvspd, fl=sys.stdout ):
     r'''Traverses `dat` in zic-sac to create a gcode raster of it.
 
     Example:
-    >>> dat = np.zeros((5,3),dtype='uint8')
-    >>> dat[:,2] = 1
+    >>> dat = np.zeros((3,4),dtype='uint8')
+    >>> dat[:,1] = 40*np.arange(3); dat[:,2] = dat[:,1]+10
     >>> buff = StringIO()
     >>> write_gcode( dat, fl=buff )
     >>> _ = buff.seek(0)
     >>> ''.join(buff.readlines())
-    u'M107\nG1 X20.1 Y20.0 F1500\n\nM106 S255\nG1 X20.1 Y20.05 F70\n\nM107\nG1 X20.1 Y20.1 F1500\n\nM106 S255\nG1 X20.1 Y20.15 F70\n\nM107\nG1 X20.1 Y20.2 F1500\n\n'
+    u'M107\nG1 X20.1 Y20.0 F2000\nM106 S96\nG1 X20.15 Y20.0 F70\n\nM107\nG1 X20.15 Y20.05 F2000\nM106 S122\nG1 X20.1 Y20.05 F70\nM106 S115\nG1 X20.05 Y20.05 F70\n\nM107\nG1 X20.05 Y20.1 F2000\nM106 S141\nG1 X20.1 Y20.1 F70\nM106 S148\nG1 X20.15 Y20.1 F70\n\n'
     '''
-    lst = 0
-    for y in xrange( 0, dat.shape[0]):
-        if all( dat[y,:]>0 ): continue # Skip empty lines
-        drcn = y % 2
-        sta = int(       drcn  * (dat.shape[1]-1)          )
-        end = int(  (not drcn) * (dat.shape[1]  ) - 1*drcn )
-        for x in xrange( sta, end, 1-2*drcn ):
+    rvsd = lst = force = 0
+    xrng = range(dat.shape[1])
+    for y in range(dat.shape[0]):
+        force = lst>0 # prevent line skipping
+        for x in reversed(xrng) if rvsd else xrng:
             val = dat[y,x]
-            if val != lst:
-                if val == 1:
+            if val != lst or force:
+                if lst<1:
                     fl.write(
                         loff +"\n"+
-                        'G1 X'+ trfx(x+drcn) +' Y'+ trfy(y) +' F'+ str(mvspd) +"\n"
+                        'G1 X'+ trfx(x+rvsd) +' Y'+ trfy(y) +' F'+ str(mvspd) +"\n"
                     )
                 else:
                     fl.write(
-                        lfon +"\n"+
-                        'G1 X'+ trfx(x+drcn) +' Y'+ trfy(y) +' F'+ str(lowspd) +"\n"
+                        lon +' S'+ trfv(lst) +"\n"+
+                        'G1 X'+ trfx(x+rvsd) +' Y'+ trfy(y) +' F'+ str(lowspd) +"\n"
                     )
                 lst = val
+                force = False
+        rvsd = not rvsd
         fl.write("\n")
 
 
-def crop(dat, clp=True, nvrt=False):
+# Coordinate transformations for `write_gcode(...)`.
+def trfx( x ): return str( x*(1.0/tdpi*25.4) + xfst )
+def trfy( y ): return str( y*(1.0/tdpi*25.4) + yfst )
+def trfv( v ): return str( int( lint + v/255*(fint - lint) ) )
+
+
+def crop(dat, clp=127, nvrt=False, flplr=False, flpud=False):
     '''Crops zero-edges of an array and clips it to [0,1].
 
     Example:
     >>> crop( np.array(
-    ...       [[0,0,0,0,0,0],
-    ...        [0,0,0,0,0,0],
-    ...        [0,1,0,2,9,0],
-    ...        [0,0,0,0,0,0],
-    ...        [0,7,4,1,0,0],
-    ...        [0,0,0,0,0,0]]
-    ...     ))
-    array([[1, 0, 1, 1],
+    ...       [[0,0,0,0,0,0,0,0],
+    ...        [0,1,0,2,9,0,0,0],
+    ...        [0,0,0,0,0,0,0,0],
+    ...        [0,7,4,1,0,0,0,0]]
+    ...     ), clp=0)
+    array([[1, 0, 2, 9],
            [0, 0, 0, 0],
-           [1, 1, 1, 0]])
+           [7, 4, 1, 0]])
     '''
-    if clp:    np.clip( dat, 0, 1, out=dat )
-    if nvrt:   dat = 1-dat
+    if clp:    dat[dat<=clp] = 0;
+    if bw:     dat[dat>clp] = 255;
+    if nvrt:   dat = 255-dat
     true_points = np.argwhere(dat)
     top_left = true_points.min(axis=0)
     bottom_right = true_points.max(axis=0)
     dat = dat[  top_left[0]:bottom_right[0]+1,
                 top_left[1]:bottom_right[1]+1  ]
+    if flplr:  np.fliplr(dat)
+    if flpud:  np.flipud(dat)
     return dat
 
 
-def load_img( fn, tdpi, dx, dy, w, h ):
+def prevw_ngrv(infl, dat):
+    '''Preview data'''
+    import tempfile
+    nm = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
+    mrrd = ' (mirrored)' if flplr else ''
+    a = plt.imshow( dat, interpolation='none', cmap='Greys_r' ) # Greys_r'
+    clrcode = ''
+    if a.cmap.name == 'Greys': clrcode = '\nblack=substract; white=leave'
+    if a.cmap.name == 'Greys_r': clrcode = '\nblack=leave; white=substract'
+    plt.title('Engraving mask from '+ infl + mrrd + clrcode)
+    plt.savefig(nm)
+    plt.show()
+    print( "Saved to '{}'".format(nm) )
+
+
+def load_img( fn, tdpi, clp, dx, dy, w, h ):
     '''Load raster image and prepare it for `write_gcode(...)`.'''
     img = Image.open( fn )
-    img = img.convert('L') # grayscale
+    bgr = Image.new( "RGBA", img.size, (0,0,0) )
+    bgr.paste( img, mask=img.split()[3] )
+    mode = 'P' if altm else 'L'
+    img = img.convert(mode) # greyscale
     if not w: w = img.width
     if not h: h = img.height
     if not dx: dx = img.info.get('dpi', [tdpi])[0]
@@ -202,10 +255,12 @@ def load_img( fn, tdpi, dx, dy, w, h ):
     nw, nh = int(sclx*w), int(scly*h)
     debug( 'RSTR - sclx: %s (%s px - %s dpi), scly: %s (%s px - %s dpi)',
                        sclx,  w,     dx,          scly,  h,     dy        )
-    img = img.resize( (nw,nh), Image.BICUBIC ) # NEAREST
+    img = img.resize( (nw,nh), Image.BICUBIC ) # NEAREST, BICUBIC, BILINEAR, LANCZOS
     img.info['dpi'] = (tdpi, tdpi)
     dat = np.asarray( img, dtype='uint8' )
-    dat = crop(dat, nvrt=nvrt)
+    dat.setflags(write=True)
+    #dt = np.copy(dat)
+    dat = crop(dat, clp=clp, nvrt=nvrt)
     debug('RSTR - Shape [0]: %s(y), [1]: %s(x)', dat.shape[0], dat.shape[1])
     return dat
 
@@ -218,61 +273,46 @@ def svg_get_phys_size( fn ):
     >>> _ = svg.write('<svg width="13.97cm" height="7.68in"></svg>')
     >>> _ = svg.seek(0)
     >>> svg_get_phys_size(svg)
-    (<Quantity(139.7, 'millimeter')>, <Quantity(195.072, 'millimeter')>)
+    (139.7, 195.072)
     '''
     import xml.etree.ElementTree
     xml = xml.etree.ElementTree.parse(fn).getroot()
     wd, ht = xml.attrib.get('width', None), xml.attrib.get('height', None)
     wd, ht = ureg.parse_expression(wd), ureg.parse_expression(ht)
     debug( 'XML - height: %s, width: %s', wd.to('mm'), ht.to('mm') )
-    return wd.to('mm'), ht.to('mm')
+    return round(wd.to('mm').magnitude,4), round(ht.to('mm').magnitude,4)
 
 
-def load_svg( fn, dpi, w, h ):
+def load_svg( fn, dpi, clp, w, h ):
     '''Load svg image and prepare it for `write_gcode(...)`.
 
     Example:
-    >>> load_svg('https://www.w3.org/Icons/SVG/svg-logo.svg', 0, 1, 1)
-    array([[1]], dtype=uint8)
+    >>> load_svg('https://www.w3.org/Icons/SVG/svg-logo.svg', 0, 1, 1, 1)
+    array([[71]], dtype=uint8)
     '''
     import cairosvg
     from io import BytesIO
     if not dpi: dpi = 96
     debug( 'SVG - %s, dpi: %s', fn, dpi )
-    pngtxt = cairosvg.svg2png(url=fn, dpi=dpi)
     buff = BytesIO()
-    buff.write(pngtxt)
+    cairosvg.svg2png(url=fn, write_to=buff, dpi=dpi) #url=fn #file_obj=fn
     buff.seek(0)
-    return load_img(buff, dpi, dpi, dpi, w, h)
-
-
-def trfx( x ):
-    return str(x*(1.0/tdpi*25.4)+xfst)
-
-def trfy( y ):
-    return str(y*(1.0/tdpi*25.4)+yfst)
+    return load_img(buff, dpi, clp, dpi, dpi, w, h)
 
 
 def write_ngrv_file(infl, outfl):
     '''Make a gcode raster for engraving from an input image.'''
     try:
-        dat = load_svg(infl, tdpi, None, None)
+        dat = load_svg(infl, tdpi, clp, None, None)
     except:
         try:
-            dat = load_img(infl, tdpi, None, None, None, None)
+            dat = load_img(infl, tdpi, clp, None, None, None, None)
         except:
             raise
 
     # Preview if verbose
-    dat.setflags( write=True )
     if verb <= logging.WARNING:
-        import tempfile
-        nm = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
-        plt.title('Engraving mask from '+ infl)
-        plt.imshow( dat, interpolation='none', cmap='Greys_r' )
-        plt.savefig(nm)
-        plt.show()
-        print( "Saved to '{}'".format(nm) )
+        prevw_ngrv(infl, dat)
 
     # Write File
     fl = open( outfl, 'w' ) if outfl else sys.stdout
@@ -281,17 +321,32 @@ def write_ngrv_file(infl, outfl):
     allvars = dict(globals(), **locals())
 
     fl.write( pre.format(**allvars) )
-    write_gcode( dat, lfon, loff, lowspd, mvspd, fl )
+    write_gcode( dat, lon, loff, lowspd, mvspd, fl )
     fl.write( post.format( **globals() ) )
+
+
+def run_tests():
+    '''Run tests for all functions in this code.'''
+    import doctest
+    class Py23DocChecker(doctest.OutputChecker):
+      def check_output(self, want, got, optionflags):
+        if sys.version_info[0] > 2:
+          want = re.sub("u'(.*?)'", "'\\1'", want)
+          want = re.sub('u"(.*?)"', '"\\1"', want)
+        return want == got
+    doctest.OutputChecker = Py23DocChecker
+    sys.exit( doctest.testmod(
+            m=sys.modules.get('img2ngrv'),
+            verbose=True
+    )[0] )
 
 
 def main():
     # Argument handling and all the boring bookkeeping stuff
-    progname = os.path.splitext(os.path.basename( __file__ ))[0]
-    vstring = (' v0.4\nWritten by con-f-use@gmx.net\n'
-               '(Sat Sep 14 12:01:51 CEST 2016) on confusion' )
-    args = docopt(__doc__.format(progname=progname,**globals()), version=progname+vstring)
-    if args['--test']: import doctest; doctest.testmod(); exit(0)
+    args = docopt(__doc__.format(**globals()), version=__vstring__)
+    #options = {re.match('\{(.*)\}',o.value).group(1): re.sub('^--', '', o.name) for o in docopt.parse_defaults(dm) if o.value and re.match('\{.*\}',o.value)}
+    #args = {re.sub('^--', '', k): v for k, v in args.items()}
+    if args['--test']: run_tests()
     verb    = logging.ERROR - int(args['--verbose'])*10
     logging.basicConfig(
         level   = verb,
@@ -299,22 +354,34 @@ def main():
                   '%(filename)s:%(lineno)s) %(message)s',
         datefmt = '%y%m%d %H:%M'   #, stream=, mode=, filename=
     )
-    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon
+    global lon, loff, nvrt, tdpi, xfst, yfst, lghtspd, lowspd, mvspd, lson, lfon, fint, lint, bw, flplr, altm, clp
     lon     =      args['--on-command']
     loff    =      args['--off-command']
     nvrt    =      args['--invert']
+    bw      =      args['--black-and-white']
+    altm    =      args['--alternate-mode']
+    flplr   =      args['--mirror']
+    clp     = int( args['--clip']               )
+    lint    = int( args['--engraver-threshold'] )
+    fint    = int( args['--engraver-max']       )
+    lghtspd = int( args['--light-speed']        )
+    lowspd  = int( args['--low-speed']          )
+    mvspd   = int( args['--move-speed']         )
     tdpi    = ureg.parse_expression(args['--target-resolution'])
     xfst    = ureg.parse_expression(args['--x-offset'])
     yfst    = ureg.parse_expression(args['--y-offset'])
     if tdpi.dimensionality == '[length]': tdpi = 1.0/tdpi
-    tdpi = int( tdpi.to('dpi').magnitude )
-    xfst = float( xfst.to('mm').magnitude )
-    yfst = float( yfst.to('mm').magnitude )
-    lghtspd = int( args['--light-speed'] )
-    lowspd  = int( args['--low-speed']   )
-    mvspd   = int( args['--move-speed']  )
-    lson = lon +' S'+ str(int( args['--engraver-threshold'] ))
-    lfon = lon +' S'+ str(int( args['--engraver-max']       ))
+    tdpi    = int( tdpi.to('dpi').magnitude )
+    xfst    = float( xfst.to('mm').magnitude )
+    yfst    = float( yfst.to('mm').magnitude )
+    lson = lon +' S'+ str(lint)
+    lfon = lon +' S'+ str(fint)
+    if args['--preamble']:
+        with open(args['--preamble']) as fh:
+            pre = ''.join(fh.readlines())
+    if args['--footer']:
+        with open(args['--footer']  ) as fh:
+            post = ''.join(fh.readlines())
 
     write_ngrv_file( args['INFILE'], args['OUTFILE'] )
 
