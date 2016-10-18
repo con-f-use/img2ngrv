@@ -13,16 +13,28 @@ def get_field(field):
     return value
 
 try:
-    vstr = subprocess.check_output('git describe --abbrev=5 --dirty=-dev --always --tags'.split())
+    vstr = subprocess.check_output('git describe --abbrev=5 --dirty=exp --always --tags'.split())
     _version = ' '.join(vstr.decode('ascii', 'ignore').split())
-    flnm = os.path.join(os.path.dirname(__file__), infln)
-    for line in fileinput.input(flnm, inplace=True, backup='.bak'):
-        line = re.sub(
-            r'^(\s*__version__\s*=\s*[\'"]).*?([\'"].*)$',
-            r'\g<1>'+ str(_version) +r'\g<2>',
-            line
-        )
-        print(line.strip('\n'))
+    r = re.compile(r'^'+
+            r'v?(?P<tag>\d+(\.\d+)*)'+
+            r'(-(?P<commit>\d+))?'+
+            r'(-g(?P<hash>[a-fA-F0-9]{5,}))?'+
+            r'(?P<exp>exp)?$' )
+    m = [v.groupdict() for v in r.finditer(_version)]
+    if m:
+        m = m[0]
+        _version = m['tag']
+        if m['commit']: _version += '.dev'+ m['commit']
+        if m['hash']:   _version += '+'+ m['hash']
+        if m['exp']:    _version += '.'+ m['exp']
+        flnm = os.path.join(os.path.dirname(__file__), infln)
+        for line in fileinput.input(flnm, inplace=True, backup='.bak'):
+            line = re.sub(
+                r'^(\s*__version__\s*=\s*[\'"]).*?([\'"].*)$',
+                r'\g<1>'+ str(_version) +r'\g<2>',
+                line
+            )
+            print(line.strip('\n'))
 except subprocess.CalledProcessError: pass
 
 setup(

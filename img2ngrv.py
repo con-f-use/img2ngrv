@@ -68,12 +68,12 @@ import matplotlib.pyplot as plt
 from docopt import docopt
 from PIL import Image
 
-__version__      = 'v0.4-21'
+__version__      = '0.4.dev2'
 __author__       = 'con-f-use'
 __author_email__ = 'con-f-use@gmx.net'
 __url__          = 'https://github.com/con-f-use/img2ngrv'
 __package__ = os.path.splitext(os.path.basename( __file__ ))[0]
-__vstring__ = '{} {}\nWritten by {}'.format( __package__, __version__,
+__vstring__ = 'v{} {}\nWritten by {}'.format( __package__, __version__,
                                               __author__                )
 
 #=======================================================================
